@@ -2,7 +2,7 @@ const express = require("express");
 const cors = require("cors");
 const app = express();
 require("dotenv").config();
-const { MongoClient, ServerApiVersion } = require("mongodb");
+const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 const port = process.env.PORT || 3000;
 
 // midleware
@@ -26,17 +26,32 @@ async function run() {
 
     const db = client.db("book_courier_db");
     const bookCollection = db.collection("allbooks");
+    const orderCollection = db.collection("all_order")
 
 
     // All Books Api
 
-    app.get("/allbooks", (req, res) => {
-
+    app.get("/allbooks", async (req, res) => {
+        const result = await bookCollection.find().toArray()
+        res.send(result)
+    });
+    app.get("/allbooks/:id", async (req, res) => {
+        const id = req.params.id
+        const query = {_id: new ObjectId(id)}
+        const result = await bookCollection.findOne(query)
+        res.send(result)
     });
 
     app.post('/allbooks', async(req, res)=>{
       const books = req.body
       const result = await bookCollection.insertOne(books)
+      res.send(result)
+    })
+
+    // order data 
+    app.post('/orders', async (req,res)=>{
+      const order = req.body
+      const result = await orderCollection.insertOne(order)
       res.send(result)
     })
 
