@@ -3,6 +3,7 @@ const cors = require("cors");
 const app = express();
 require("dotenv").config();
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
+const stripe = require("stripe")(process.env.STRIPE_Secrete_Key);
 const port = process.env.PORT || 3000;
 
 // midleware
@@ -60,7 +61,12 @@ async function run() {
       const result = await orderCollection.find(query).toArray();
       res.send(result);
     });
-
+    app.get("/payment/:id", async (req, res) => {
+      const id = req.params.id;
+      const query = { _id: new ObjectId(id) };
+      const result = await orderCollection.findOne(query);
+      res.send(result);
+    });
     app.patch("/orders/:id", async (req, res) => {
       const id = req.params.id;
       const status = req.body.status;
@@ -69,6 +75,37 @@ async function run() {
 
       const result = await orderCollection.updateOne(query, update);
       res.send(result);
+    });
+
+    // payment API
+
+    app.get("/payment-checkout-session", async (req, res) => {
+      const paymentInfo = req.body;
+      const amount = parseInt(paymentInfo.price)
+      const session = await stripe.checkout.sessions.create({
+        line_items: [
+          {
+  
+            price_data: {
+              currency: "USD",
+              unit_amount: amount,
+              product_data:{
+                name: paymentInfo.bookTitle
+              }
+            },
+            quantity: 1,
+          },
+        ],
+        mode: "payment",
+        customer_email: paymentInfo.userEmail,
+        metadata:{
+          bookId: paymentInfo.bookId
+        },
+        success_url: `${process.env.SITE_DOMAIN}/dashboard/payment-success`,
+        cancel_url: `${process.env.SITE_DOMAIN}/dashboard/payment-cancelled`,
+      });
+      console.log(session)
+      res.send({url: session.url})
     });
 
     // Send a ping to confirm a successful connection
