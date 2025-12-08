@@ -81,31 +81,47 @@ async function run() {
 
     app.post("/payment-checkout-session", async (req, res) => {
       const paymentInfo = req.body;
-      const amount = parseInt(paymentInfo.price) * 100
+      const amount = parseInt(paymentInfo.price) * 100;
       const session = await stripe.checkout.sessions.create({
         line_items: [
           {
-  
             price_data: {
               currency: "USD",
               unit_amount: amount,
-              product_data:{
-                name: paymentInfo.bookTitle
-              }
+              product_data: {
+                name: paymentInfo.bookTitle,
+              },
             },
             quantity: 1,
           },
         ],
         mode: "payment",
         customer_email: paymentInfo.userEmail,
-        metadata:{
-          bookId: paymentInfo.bookId
+        metadata: {
+          orderId: paymentInfo.orderId,
         },
-        success_url: `${process.env.SITE_DOMAIN}/dashboard/payment-success`,
+        success_url: `${process.env.SITE_DOMAIN}/dashboard/payment-success?session_id={CHECKOUT_SESSION_ID}`,
         cancel_url: `${process.env.SITE_DOMAIN}/dashboard/payment-cancelled`,
       });
+      console.log(session);
+      res.send({ url: session.url });
+    });
+
+    app.patch("/payment-success", async (req, res) => {
+      const sessionId = req.query.session_id;
+
+      const session = await stripe.checkout.sessions.retrieve(sessionId);
       console.log(session)
-      res.send({url: session.url})
+      if (session.payment_status === "paid") {
+        const id = session.metadata.orderId;
+        const query = { _id: new ObjectId(id) };
+        const update = { $set: { status: "paid" } };
+
+        const result = await orderCollection.updateOne(query, update);
+        return res.send({ success: true, result });
+      }
+
+      return res.send({ success: false });
     });
 
     // Send a ping to confirm a successful connection
