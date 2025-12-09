@@ -56,13 +56,39 @@ async function run() {
       const result = await orderCollection.insertOne(order);
       res.send(result);
     });
-
+    // get orders by email
     app.get("/orders", async (req, res) => {
       const email = req.query.email;
       const query = { userEmail: email };
       const result = await orderCollection.find(query).toArray();
       res.send(result);
     });
+
+    // All orders GET API
+
+    app.get("/orders", async (req, res) => {
+      try {
+        const userEmail = req.query.email; 
+
+        if (!userEmail) {
+          return res.status(400).send({ message: "Email is required" });
+        }
+        const user = await usersCollection.findOne({ email: userEmail });
+
+        if (!user) {
+          return res.status(404).send({ message: "User not found" });
+        }
+        if (user.role !== "admin" && user.role !== "librarian") {
+          return res.status(403).send({ message: "Access denied" });
+        }
+        const orders = await orderCollection.find().toArray();
+        res.send(orders);
+      } catch (error) {
+        console.error(error);
+        res.status(500).send({ message: "Internal server error" });
+      }
+    });
+
     app.get("/payment/:id", async (req, res) => {
       const id = req.params.id;
       const query = { _id: new ObjectId(id) };
@@ -216,6 +242,16 @@ async function run() {
 
       const result = await usersCollection.insertOne(user);
       res.send(result);
+    });
+
+    // get user API
+
+    app.get("/users/:email", async (req, res) => {
+      const email = req.params.email;
+      const query = { email: email };
+
+      const user = await usersCollection.findOne(query);
+      res.send(user);
     });
 
     // Send a ping to confirm a successful connection
