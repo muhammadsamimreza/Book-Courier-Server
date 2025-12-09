@@ -56,13 +56,7 @@ async function run() {
       const result = await orderCollection.insertOne(order);
       res.send(result);
     });
-    // get orders by email
-    app.get("/orders", async (req, res) => {
-      const email = req.query.email;
-      const query = { userEmail: email };
-      const result = await orderCollection.find(query).toArray();
-      res.send(result);
-    });
+  
 
     // All orders GET API
 
@@ -74,14 +68,16 @@ async function run() {
           return res.status(400).send({ message: "Email is required" });
         }
         const user = await usersCollection.findOne({ email: userEmail });
-
         if (!user) {
           return res.status(404).send({ message: "User not found" });
         }
-        if (user.role !== "admin" && user.role !== "librarian") {
-          return res.status(403).send({ message: "Access denied" });
+        let query = {};
+        if (user.role === "admin" || user.role === "librarian") {
+          query = {};
+        } else {
+          query.userEmail = userEmail;
         }
-        const orders = await orderCollection.find().toArray();
+        const orders = await orderCollection.find(query).toArray();
         res.send(orders);
       } catch (error) {
         console.error(error);
