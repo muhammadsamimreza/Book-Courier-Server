@@ -103,15 +103,15 @@ async function run() {
         if (user.role !== "librarian" && user.role !== "admin") {
           return res.status(403).send({ message: "Access denied" });
         }
-        const books = await bookCollection.find({ addBy: librarianEmail }).toArray();
+        const books = await bookCollection
+          .find({ addBy: librarianEmail })
+          .toArray();
         res.send(books);
       } catch (error) {
         console.error(error);
         res.status(500).send({ message: "Internal server error" });
       }
     });
-
-
 
     app.get("/payment/:id", async (req, res) => {
       const id = req.params.id;
@@ -276,6 +276,38 @@ async function run() {
 
       const user = await usersCollection.findOne(query);
       res.send(user);
+    });
+
+    // get API for librarian Edit Book
+
+    app.get("/books/:id", async (req, res) => {
+      const id = req.params.id;
+      const query = { _id: new ObjectId(id) };
+      const result = await bookCollection.findOne(query);
+
+      if (!result) return res.status(404).send({ message: "Book not found" });
+
+      res.send(result);
+    });
+    // patch API for librarian for Update Book
+
+    app.patch("/books/:id", async (req, res) => {
+      const id = req.params.id;
+      const updateData = req.body;
+      const query = { _id: new ObjectId(id) };
+
+      const updatedDoc = {
+        $set: {
+          title: updateData.title,
+          author: updateData.author,
+          photoURL: updateData.photoURL,
+          status: updateData.status,
+          updatedAt: new Date(),
+        },
+      };
+
+      const result = await bookCollection.updateOne(query, updatedDoc);
+      res.send(result);
     });
 
     // Send a ping to confirm a successful connection
