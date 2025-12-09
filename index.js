@@ -29,6 +29,7 @@ async function run() {
     const bookCollection = db.collection("allbooks");
     const orderCollection = db.collection("all_order");
     const paymentCollection = db.collection("payment-success");
+    const usersCollection = db.collection("users");
 
     // All Books Api
 
@@ -201,6 +202,19 @@ async function run() {
       const result = await paymentCollection
         .find({ userEmail: email })
         .toArray();
+      res.send(result);
+    });
+
+    // make user API
+
+    app.post("/users", async (req, res) => {
+      const user = req.body;
+      const query = { email: user.email };
+      const exists = await usersCollection.findOne(query);
+
+      if (exists) return res.send({ message: "User already exists" });
+
+      const result = await usersCollection.insertOne(user);
       res.send(result);
     });
 
