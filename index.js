@@ -68,7 +68,7 @@ async function run() {
 
     app.get("/orders", async (req, res) => {
       try {
-        const userEmail = req.query.email; 
+        const userEmail = req.query.email;
 
         if (!userEmail) {
           return res.status(400).send({ message: "Email is required" });
@@ -88,6 +88,30 @@ async function run() {
         res.status(500).send({ message: "Internal server error" });
       }
     });
+
+    //API for Get Books by librarian
+
+    app.get("/books", async (req, res) => {
+      try {
+        const librarianEmail = req.query.email;
+        if (!librarianEmail) {
+          return res.status(400).send({ message: "Email is required" });
+        }
+        const user = await usersCollection.findOne({ email: librarianEmail });
+        if (!user) return res.status(404).send({ message: "User not found" });
+
+        if (user.role !== "librarian" && user.role !== "admin") {
+          return res.status(403).send({ message: "Access denied" });
+        }
+        const books = await bookCollection.find({ addBy: librarianEmail }).toArray();
+        res.send(books);
+      } catch (error) {
+        console.error(error);
+        res.status(500).send({ message: "Internal server error" });
+      }
+    });
+
+
 
     app.get("/payment/:id", async (req, res) => {
       const id = req.params.id;
