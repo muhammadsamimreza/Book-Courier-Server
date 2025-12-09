@@ -192,8 +192,17 @@ async function run() {
 
       return res.send({ success: false });
     });
- 
-    
+
+    // get api for payment success
+    app.get("/payments", async (req, res) => {
+      const email = req.query.email;
+      if (!email) return res.send([]);
+
+      const result = await paymentCollection
+        .find({ userEmail: email })
+        .toArray();
+      res.send(result);
+    });
 
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
