@@ -28,6 +28,7 @@ async function run() {
     const db = client.db("book_courier_db");
     const bookCollection = db.collection("allbooks");
     const orderCollection = db.collection("all_order");
+    const paymentCollection = db.collection("payment-success");
 
     // All Books Api
 
@@ -81,6 +82,18 @@ async function run() {
 
     app.post("/payment-checkout-session", async (req, res) => {
       const paymentInfo = req.body;
+      const newPaymentRecord = {
+        orderId: paymentInfo.orderId,
+        bookId: paymentInfo.bookId,
+        userEmail: paymentInfo.userEmail,
+        bookTitle: paymentInfo.bookTitle,
+        price: parseInt(paymentInfo.price),
+        status: "pending",
+        createdAt: new Date(),
+      };
+
+      const savedPayment = await paymentCollection.insertOne(newPaymentRecord);
+
       const amount = parseInt(paymentInfo.price) * 100;
       const session = await stripe.checkout.sessions.create({
         line_items: [
@@ -98,7 +111,7 @@ async function run() {
         mode: "payment",
         customer_email: paymentInfo.userEmail,
         metadata: {
-          orderId: paymentInfo.orderId,
+          paymentRecordId: savedPayment.insertedId.toString(),
         },
         success_url: `${process.env.SITE_DOMAIN}/dashboard/payment-success?session_id={CHECKOUT_SESSION_ID}`,
         cancel_url: `${process.env.SITE_DOMAIN}/dashboard/payment-cancelled`,
@@ -107,22 +120,80 @@ async function run() {
       res.send({ url: session.url });
     });
 
+    // app.patch("/payment-success", async (req, res) => {
+    //   const sessionId = req.query.session_id;
+
+    //   const session = await stripe.checkout.sessions.retrieve(sessionId);
+    //   console.log(session);
+    //   if (session.payment_status === "paid") {
+    //     const recordId = session.metadata.paymentRecordId;
+    //     const query = { _id: new ObjectId(recordId) };
+    //     const update = {
+    //       $set: {
+    //         status: "paid",
+    //         paymentTime: new Date(),
+    //         transactionId: session.payment_intent,
+    //       },
+    //     };
+
+    //     const result = await paymentCollection.updateOne(query, update);
+    //     return res.send({ success: true, result });
+    //   }
+
+    //   return res.send({ success: false });
+    // });
+
     app.patch("/payment-success", async (req, res) => {
       const sessionId = req.query.session_id;
 
       const session = await stripe.checkout.sessions.retrieve(sessionId);
-      console.log(session)
-      if (session.payment_status === "paid") {
-        const id = session.metadata.orderId;
-        const query = { _id: new ObjectId(id) };
-        const update = { $set: { status: "paid" } };
+      console.log("Stripe Session:", session);
 
-        const result = await orderCollection.updateOne(query, update);
-        return res.send({ success: true, result });
+      if (session.payment_status === "paid") {
+        const recordId = session.metadata.paymentRecordId;
+        const query = { _id: new ObjectId(recordId) };
+
+        // Update payment collection
+        const updatePayment = {
+          $set: {
+            status: "paid",
+            paymentTime: new Date(),
+            transactionId: session.payment_intent,
+          },
+        };
+
+        const paymentUpdateResult = await paymentCollection.updateOne(
+          query,
+          updatePayment
+        );
+
+        //Get payment record to retrieve orderId
+        const paymentRecord = await paymentCollection.findOne(query);
+
+        const orderQuery = { _id: new ObjectId(paymentRecord.orderId) };
+        const updateOrder = {
+          $set: {
+            status: "paid",
+          },
+        };
+
+        // Update order collection also
+        const orderUpdateResult = await orderCollection.updateOne(
+          orderQuery,
+          updateOrder
+        );
+
+        return res.send({
+          success: true,
+          paymentUpdateResult,
+          orderUpdateResult,
+        });
       }
 
       return res.send({ success: false });
     });
+ 
+    
 
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
