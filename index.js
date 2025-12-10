@@ -50,34 +50,134 @@ async function run() {
       res.send(result);
     });
 
+    /// status change API for ADMIN
+
+    app.patch("/allbooks/:id", async (req, res) => {
+      try {
+        const id = req.params.id;
+        const { status } = req.body;
+        if (!status) {
+          return res.status(400).send({ message: "Status is required" });
+        }
+
+        const allowed = ["published", "unpublished"];
+        if (!allowed.includes(status)) {
+          return res.status(400).send({ message: "Invalid status value" });
+        }
+
+        const query = { _id: new ObjectId(id) };
+        const updateDoc = {
+          $set: { status: status },
+        };
+
+        const result = await bookCollection.updateOne(query, updateDoc);
+
+        if (result.modifiedCount > 0) {
+          res.send({ message: "Book status updated successfully" });
+        } else {
+          res.status(404).send({ message: "Book not found" });
+        }
+      } catch (error) {
+        console.error(error);
+        res.status(500).send({ message: "Internal server error" });
+      }
+    });
+
+    /// delete book API for ADMIN
+
+    app.delete("/allbooks/:id", async (req, res) => {
+      try {
+        const id = req.params.id;
+
+        // Validate ID
+        if (!ObjectId.isValid(id)) {
+          return res.status(400).send({ message: "Invalid Book ID" });
+        }
+
+        // Find book first
+        const book = await bookCollection.findOne({ _id: new ObjectId(id) });
+        if (!book) {
+          return res.status(404).send({ message: "Book not found" });
+        }
+
+        // Delete the book
+        const deleteBook = await bookCollection.deleteOne({
+          _id: new ObjectId(id),
+        });
+
+        // Delete all orders for that book
+        const deleteOrders = await orderCollection.deleteMany({ bookId: id });
+
+        res.send({
+          message: "Book deleted successfully",
+          deletedBookCount: deleteBook.deletedCount,
+          deletedOrdersCount: deleteOrders.deletedCount,
+        });
+      } catch (error) {
+        console.error(error);
+        res.status(500).send({ message: "Internal server error" });
+      }
+    });
+
     // order data
     app.post("/orders", async (req, res) => {
       const order = req.body;
       const result = await orderCollection.insertOne(order);
       res.send(result);
     });
-  
 
     // All orders GET API
+
+    // app.get("/orders", async (req, res) => {
+    //   try {
+    //     const userEmail = req.query.email;
+
+    //     if (!userEmail) {
+    //       return res.status(400).send({ message: "Email is required" });
+    //     }
+    //     const user = await usersCollection.findOne({ email: userEmail });
+    //     if (!user) {
+    //       return res.status(404).send({ message: "User not found" });
+    //     }
+    //     let query = {};
+    //     if (user.role === "admin" || user.role === "librarian") {
+    //       query = {};
+    //     } else {
+    //       query.userEmail = userEmail;
+    //     }
+    //     const orders = await orderCollection.find(query).toArray();
+    //     res.send(orders);
+    //   } catch (error) {
+    //     console.error(error);
+    //     res.status(500).send({ message: "Internal server error" });
+    //   }
+    // });
 
     app.get("/orders", async (req, res) => {
       try {
         const userEmail = req.query.email;
-
-        if (!userEmail) {
+        if (!userEmail)
           return res.status(400).send({ message: "Email is required" });
-        }
+
         const user = await usersCollection.findOne({ email: userEmail });
-        if (!user) {
-          return res.status(404).send({ message: "User not found" });
-        }
-        let query = {};
-        if (user.role === "admin" || user.role === "librarian") {
-          query = {};
+        if (!user) return res.status(404).send({ message: "User not found" });
+
+        let orders = [];
+
+        if (user.role === "admin") {
+          orders = await orderCollection.find().toArray();
+        } else if (user.role === "librarian") {
+          const myBooks = await bookCollection
+            .find({ addBy: userEmail })
+            .project({ _id: 1 })
+            .toArray();
+          const bookIds = myBooks.map((book) => book._id.toString());
+          orders = await orderCollection
+            .find({ bookId: { $in: bookIds } })
+            .toArray();
         } else {
-          query.userEmail = userEmail;
+          orders = await orderCollection.find({ userEmail }).toArray();
         }
-        const orders = await orderCollection.find(query).toArray();
         res.send(orders);
       } catch (error) {
         console.error(error);
@@ -203,7 +303,7 @@ async function run() {
         // Update payment collection
         const updatePayment = {
           $set: {
-            status: "paid",
+            payment: "paid",
             paymentTime: new Date(),
             transactionId: session.payment_intent,
           },
@@ -220,7 +320,7 @@ async function run() {
         const orderQuery = { _id: new ObjectId(paymentRecord.orderId) };
         const updateOrder = {
           $set: {
-            status: "paid",
+            payment: "paid",
           },
         };
 
